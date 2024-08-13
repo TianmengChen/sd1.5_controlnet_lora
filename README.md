@@ -13,7 +13,7 @@ python ov_model_export.py
 python ov_model_infer.py
 ```
 
-# 2. Code Explaination
+# 3. Code Explaination
 The most important part is the code in **util.py**, which is used to modify the model graph and load lora.
 
 Function *load_lora(lora_path, DEVICE_NAME)* is used to load lora, get lora's shape and weights per layers and modify each layer's name. 

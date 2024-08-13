@@ -566,6 +566,7 @@ else:
 
     image = load_image("./line.png")
 
+    print("inference with first lora")
     start_time=time.time()
 
     images = ov_pipe(
@@ -575,7 +576,9 @@ else:
     print("infer cost time(s): ")
     print(end_time-start_time)
     images[0].save(f"result_lora_01.png") 
+    print("inference with first lora success")
 
+    print("inference with second lora")
     controlnet_conditioning_scale = 0.5
     ov_pipe.switch_lora(loras[1])
     prompt = "office_tower, good weather, skyline, A rendering of the exterior front facade"
@@ -587,7 +590,9 @@ else:
     print("infer cost time(s): ")
     print(end_time-start_time)
     images[0].save(f"result_lora_02.png") 
+    print("inference with second lora success")
 
+    print("inference with third lora")
     controlnet_conditioning_scale = 1.0
     ov_pipe.switch_lora(loras[2])
     prompt = "villa, A rendering of the exterior front facade, good weather"
@@ -599,3 +604,4 @@ else:
     print("infer cost time(s): ")
     print(end_time-start_time)
     images[0].save(f"result_lora_03.png") 
+    print("inference with third lora success")

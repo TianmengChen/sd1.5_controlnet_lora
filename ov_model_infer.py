@@ -19,7 +19,6 @@ class StableDiffusionContrlNetPipelineMixin(ConfigMixin):
         num_images_per_prompt: int = 1,
         do_classifier_free_guidance: bool = True,
         negative_prompt: Union[str, List[str]] = None,
-        controlnet_conditioning_scale: float = 1.0,
     ):
         """
         Encodes the prompt into text encoder hidden states.

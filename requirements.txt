@@ -1,5 +1,5 @@
 torch --index-url https://download.pytorch.org/whl/cpu
-openvino --pre --extra-index-url https://storage.openvinotoolkit.org/simple/wheels/nightly
+openvino 
 diffusers
 accelerate
 controlnet-aux

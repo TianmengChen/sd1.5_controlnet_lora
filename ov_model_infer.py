@@ -4,7 +4,7 @@ from pathlib import Path
 import PIL
 import torch
 from diffusers.utils import  numpy_to_pil, load_image
-from util import load_lora
+from util import load_lora_runtime
 from typing import Any, Dict, List, Optional, Tuple, Union
 from diffusers import ConfigMixin, PNDMScheduler
 from transformers import  CLIPTokenizer
@@ -19,6 +19,7 @@ class StableDiffusionContrlNetPipelineMixin(ConfigMixin):
         num_images_per_prompt: int = 1,
         do_classifier_free_guidance: bool = True,
         negative_prompt: Union[str, List[str]] = None,
+        controlnet_conditioning_scale: float = 1.0,
     ):
         """
         Encodes the prompt into text encoder hidden states.
@@ -337,7 +338,7 @@ class StableDiffusionContrlNetPipelineMixin(ConfigMixin):
                     else:
                         name = "down_block_additional_residual." + str(layer_num*2 + 1)
                         layer_num += 1
-                    unet_input[name] = value
+                    unet_input[name] = controlnet_conditioning_scale * value
 
                 # noise_pred = self.unet(unet_input)[0]
                 if self.has_lora:
@@ -410,6 +411,11 @@ class OVStableDiffusionControlNetPipeline(StableDiffusionContrlNetPipelineMixin)
         # self._internal_dict = {}
         # self._progress_bar_config = {}
 
+    def switch_lora(self , lora_weights: list):
+        self.lora_text_encoder_input_value_dict = lora_weights[0]
+        # self.lora_text_encoder_2_input_value_dict = lora_weights[1]
+        self.lora_unet_input_value_dict = lora_weights[2]
+
     def __call__(
         self,
         prompt: Optional[Union[str, List[str]]] = None,
@@ -462,11 +468,15 @@ STATIC_SHAPE = [1024,1024]
 USE_LORA = True
 UNET_LORA_OV_PATH = Path("./ov_models_static_lora/unet/openvino_model.xml")
 TEXT_ENCODER_LORA_OV_PATH = Path("./ov_models_static_lora/text_encoder/openvino_model.xml")
-LORA_PATH = "lora/01_Commercial_Complex.safetensors"
+LORA_PATH_01 = "lora/01_Commercial_Complex.safetensors"
+LORA_PATH_02 = "lora/02_office_tower.safetensors"
+LORA_PATH_03 = "lora/03_villa.safetensors"
 
 core = ov.Core()
 
 if not USE_LORA:
+    import time
+    start_time=time.time()
     controlnet = core.compile_model(CONTROLNET_STATIC_OV_PATH,device_name=DEVICE_NAME, config=COMPILE_CONFIG_FP16)
     unet = core.compile_model(UNET_STATIC_OV_PATH,device_name=DEVICE_NAME, config=COMPILE_CONFIG_FP16)
     text_encoder = core.compile_model(TEXT_ENCODER_STATIC_OV_PATH,device_name=DEVICE_NAME, config=COMPILE_CONFIG_FP16)
@@ -484,6 +494,10 @@ if not USE_LORA:
         # tokenizer_2=tokenizer_2,
         scheduler=scheduler,
     )
+    end_time=time.time()
+    print("pipeline init cost time(s): ")
+    print(end_time-start_time)
+
     seed = 42
     torch.manual_seed(seed)           
     torch.cuda.manual_seed(seed)       
@@ -497,32 +511,20 @@ if not USE_LORA:
 
     image = load_image("./line.png")
 
-    import time
+
     start_time=time.time()
 
     images = ov_pipe(
         prompt, negative_prompt=negative_prompt, image=image, controlnet_conditioning_scale=controlnet_conditioning_scale, num_inference_steps=20,height=1024,width=1024,
         )
     end_time=time.time()
-    print("cost time(s): ")
+    print("infer cost time(s): ")
     print(end_time-start_time)
     images[0].save(f"result.png") 
 else:
-    def load_lora_alpha(input_value_dict, lora_alpha):
-        new_input_value_dict = input_value_dict.copy()
-        for key, value in input_value_dict.items():
-            if 'lora_down' in key:
-                new_input_value_dict[key.replace('lora_down', 'lora_alpha')] = lora_alpha
-        return new_input_value_dict
-
-
     import time
     start_time=time.time()
-    lora_text_encoder_input_value_dict, lora_text_encoder_2_input_value_dict, lora_unet_input_value_dict, lora_alpha = load_lora(LORA_PATH, DEVICE_NAME)
-    lora_alpha = 0.75
-    lora_text_encoder_input_value_dict = load_lora_alpha(lora_text_encoder_input_value_dict, lora_alpha)
-    lora_text_encoder_2_input_value_dict = load_lora_alpha(lora_text_encoder_2_input_value_dict, lora_alpha)
-    lora_unet_input_value_dict = load_lora_alpha(lora_unet_input_value_dict, lora_alpha)
+    loras = load_lora_runtime(LORA_PATH_01, DEVICE_NAME), load_lora_runtime(LORA_PATH_02, DEVICE_NAME), load_lora_runtime(LORA_PATH_03, DEVICE_NAME)
     end_time=time.time()
     print("load lora cost time(s): ")
     print(end_time-start_time)
@@ -546,7 +548,7 @@ else:
         tokenizer=tokenizer,
         # tokenizer_2=tokenizer_2,
         scheduler=scheduler,
-        lora_weights = [lora_text_encoder_input_value_dict, lora_text_encoder_2_input_value_dict, lora_unet_input_value_dict]
+        lora_weights = loras[0]
     )
     end_time=time.time()
     print("pipeline init cost time(s): ")
@@ -573,4 +575,28 @@ else:
     end_time=time.time()
     print("infer cost time(s): ")
     print(end_time-start_time)
-    images[0].save(f"result_lora.png") 
+    images[0].save(f"result_lora_01.png") 
+
+    controlnet_conditioning_scale = 0.5
+    ov_pipe.switch_lora(loras[1])
+    prompt = "office_tower, good weather, skyline, A rendering of the exterior front facade"
+    start_time=time.time()
+    images = ov_pipe(
+        prompt, negative_prompt=negative_prompt, image=image, controlnet_conditioning_scale=controlnet_conditioning_scale, num_inference_steps=20,height=1024,width=1024,
+        )
+    end_time=time.time()
+    print("infer cost time(s): ")
+    print(end_time-start_time)
+    images[0].save(f"result_lora_02.png") 
+
+    controlnet_conditioning_scale = 1.0
+    ov_pipe.switch_lora(loras[2])
+    prompt = "villa, A rendering of the exterior front facade, good weather"
+    start_time=time.time()
+    images = ov_pipe(
+        prompt, negative_prompt=negative_prompt, image=image, controlnet_conditioning_scale=controlnet_conditioning_scale, num_inference_steps=20,height=1024,width=1024,
+        )
+    end_time=time.time()
+    print("infer cost time(s): ")
+    print(end_time-start_time)
+    images[0].save(f"result_lora_03.png") 

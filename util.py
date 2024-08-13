@@ -222,6 +222,23 @@ def convert_model_to_lora(original_model_path, lora_model_path, lora_path, devic
     convert_model_to_lora_param_unet(Path(unet_path), lora_unet_input_value_dict, Path(unet_lora_path))
     convert_model_to_lora_param_test_encoder(Path(text_encoder_path), lora_text_encoder_input_value_dict, Path(text_encoder_lora_path))
 
+def load_lora_alpha(input_value_dict, lora_alpha):
+    new_input_value_dict = input_value_dict.copy()
+    for key, value in input_value_dict.items():
+        if 'lora_down' in key:
+            new_input_value_dict[key.replace('lora_down', 'lora_alpha')] = lora_alpha
+    return new_input_value_dict
+
+def load_lora_runtime(LORA_PATH, device, lora_weight=1):
+    lora_text_encoder_input_value_dict, lora_text_encoder_2_input_value_dict, lora_unet_input_value_dict, lora_alpha = load_lora(LORA_PATH, device)
+    print("original lora_alpha is ", lora_alpha)
+    lora_alpha = lora_weight
+    print("manually set lora_weight ", lora_alpha)
+    lora_text_encoder_input_value_dict = load_lora_alpha(lora_text_encoder_input_value_dict, lora_alpha)
+    lora_text_encoder_2_input_value_dict = load_lora_alpha(lora_text_encoder_2_input_value_dict, lora_alpha)
+    lora_unet_input_value_dict = load_lora_alpha(lora_unet_input_value_dict, lora_alpha)
+    return lora_text_encoder_input_value_dict, lora_text_encoder_2_input_value_dict, lora_unet_input_value_dict
+    
 class InsertLoRAUnet(MatcherPass):
     def __init__(self, input_param_dict):
         MatcherPass.__init__(self)
